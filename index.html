@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Multiplayer Sketch (DEBUG)</title>
+    <title>Real-Time Multiplayer Sketch (FIXED)</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     
     <style>
-        /* CSS is identical to the previous version for consistency */
+        /* CSS is unchanged */
         :root {
             --color-background: #1e1e1e;
             --color-surface: #2d2d2d;
@@ -251,6 +251,8 @@
         
         let database;
         let drawingRef;
+        // *** NEW: Reference for real-time chat messages ***
+        let chatRef; 
         const statusDiv = document.getElementById('game-status');
         
         const CANVAS_WIDTH = 800; 
@@ -276,8 +278,10 @@
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
                 drawingRef = database.ref('game/currentDrawing');
+                // *** INITIALIZE CHAT REFERENCE ***
+                chatRef = database.ref('game/chatMessages');
                 
-                // 2. Set Connection Status Listener (Checks if Firebase is reachable)
+                // 2. Set Connection Status Listener
                 database.ref('.info/connected').on('value', (snapshot) => {
                     if (snapshot.val() === true) {
                         statusDiv.textContent = 'Status: Connected & Ready';
@@ -294,7 +298,6 @@
                 setupControls();
 
             } catch (error) {
-                // *** THIS CATCH BLOCK IS THE CRITICAL DEBUGGING TOOL ***
                 console.error("--- CRITICAL FIREBASE INITIALIZATION ERROR ---");
                 console.error("Please copy this error text to find the solution:", error);
                 statusDiv.textContent = 'INIT ERROR! See Console (F12)';
@@ -303,7 +306,7 @@
         }
 
 
-        // --- DRAWING LOGIC (Identical to previous, proven to be functional) ---
+        // --- DRAWING LOGIC (Unchanged) ---
 
         function startDrawing(clientX, clientY) {
             isDrawing = true;
@@ -328,7 +331,6 @@
                 width: controls.width.value
             };
 
-            // Push data only if successfully connected
             if (drawingRef) {
                 drawingRef.push(data); 
             }
@@ -372,17 +374,49 @@
         }
 
 
-        // --- FIREBASE LISTENERS & CONTROLS ---
+        // --- FIREBASE LISTENERS & CONTROLS (Updated) ---
+
+        function displayMessage(data) {
+            const chatList = document.getElementById('chat-list');
+            const li = document.createElement('li');
+            
+            // Determine the message content
+            const sender = data.user || 'Guest'; 
+            let messageText = `<strong>${sender}:</strong> ${data.text}`;
+            
+            // Highlight correct guesses
+            if (data.isCorrect) {
+                li.style.color = '#00e676'; 
+                messageText = `🏆 <strong>${sender} GUESSED IT! (${data.text})</strong>`;
+            }
+            
+            li.innerHTML = messageText;
+            chatList.appendChild(li);
+            chatList.scrollTop = chatList.scrollHeight; // Auto-scroll
+        }
+
 
         function setupFirebaseListener() {
-            // Add a listener for any potential write errors (e.g., Permission Denied)
+            // Error Listener for Drawing
             drawingRef.on('value', () => {}, (error) => {
-                console.error("FIREBASE REALTIME ERROR (Permission/Database):", error);
+                console.error("FIREBASE REALTIME ERROR (Drawing Permission):", error);
             });
 
+            // Drawing Listener (renders all strokes)
             drawingRef.on('child_added', (snapshot) => {
                 const data = snapshot.val();
                 drawSegment(data);
+            });
+            
+            // *** NEW: Chat Message Listener (renders all messages) ***
+            chatRef.on('child_added', (snapshot) => {
+                const messageData = snapshot.val();
+                displayMessage(messageData);
+            });
+            
+            // Error Listener for Chat
+            chatRef.on('value', () => {}, (error) => {
+                console.error("FIREBASE REALTIME ERROR (Chat Permission):", error);
             });
         }
 
@@ -397,10 +431,9 @@
                 }
             });
 
-            // Game Guessing Placeholder
+            // Game Guessing Logic (NOW REAL-TIME)
             const guessInput = document.getElementById('guess-input');
             const sendGuessBtn = document.getElementById('send-guess');
-            const chatList = document.getElementById('chat-list');
             let currentWord = "FIREBASE"; 
 
             sendGuessBtn.addEventListener('click', () => {
@@ -408,14 +441,21 @@
                 if (guess === "") return;
                 
                 const isCorrect = guess.toUpperCase() === currentWord;
-                const message = isCorrect
-                    ? `🟢 CORRECT! Player guessed the word: ${currentWord}`
-                    : `🟠 Guess: ${guess}`;
                 
-                const li = document.createElement('li');
-                li.innerHTML = message;
-                chatList.appendChild(li);
-                chatList.scrollTop = chatList.scrollHeight;
+                const chatData = {
+                    user: 'Guest', // Placeholder, replace with actual user name if you add Auth
+                    text: guess,
+                    isCorrect: isCorrect,
+                    timestamp: Date.now()
+                };
+
+                // *** PUSH DATA TO FIREBASE (Fixes public view issue) ***
+                if (chatRef) {
+                    chatRef.push(chatData);
+                } else {
+                    console.error("Chat reference not initialized. Cannot send message.");
+                }
+                // *******************************************************
                 
                 guessInput.value = ''; 
             });
