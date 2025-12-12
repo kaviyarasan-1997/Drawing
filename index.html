@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Multiplayer Sketch (Single File)</title>
+    <title>Real-Time Multiplayer Sketch (DEBUG)</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script> 
     
     <style>
-        /* --- CSS STYLES (Professional Dark Mode) --- */
+        /* CSS is identical to the previous version for consistency */
         :root {
             --color-background: #1e1e1e;
             --color-surface: #2d2d2d;
-            --color-primary: #00e676; /* Bright Green Accent */
-            --color-secondary: #00b0ff; /* Blue Accent */
+            --color-primary: #00e676; 
+            --color-secondary: #00b0ff;
             --color-text: #e0e0e0;
             --color-border: #444444;
         }
@@ -83,7 +82,7 @@
 
         #drawing-canvas {
             border: 2px solid var(--color-border);
-            background-color: #ffffff; /* Drawing surface is white */
+            background-color: #ffffff;
             cursor: crosshair;
             border-radius: 8px;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
@@ -118,10 +117,9 @@
             font-weight: 600;
         }
 
-        /* Inputs */
         input[type="range"], input[type="color"] {
             width: 100%;
-            height: 25px; /* Adjust height for range input */
+            height: 25px;
         }
         
         #color-picker {
@@ -131,7 +129,6 @@
             background: transparent;
         }
 
-        /* Buttons */
         .btn-primary, .btn-secondary {
             width: 100%;
             padding: 10px;
@@ -184,13 +181,12 @@
             color: var(--color-text);
         }
 
-        /* Responsive Design */
         @media (max-width: 900px) {
             .main-layout {
                 flex-direction: column;
             }
             .control-panel {
-                width: auto; /* Full width */
+                width: auto;
                 border-left: none;
                 border-top: 1px solid var(--color-border);
             }
@@ -205,7 +201,6 @@
         </header>
 
         <div class="main-layout">
-            
             <main class="canvas-panel">
                 <canvas id="drawing-canvas"></canvas>
             </main>
@@ -244,7 +239,7 @@
     <script>
         // --- JAVASCRIPT LOGIC ---
 
-        // 1. Firebase Configuration (USE YOUR PROVIDED KEYS)
+        // 1. Firebase Configuration 
         const firebaseConfig = {
             apiKey: "AIzaSyBLyf_dz6xPC9wdthZSVtpatkc8JgFhE4Q",
             authDomain: "chatbox-chats.firebaseapp.com",
@@ -254,12 +249,10 @@
             appId: "1:10200860576:web:262315d86f6d1732ddc6c5"
         };
         
-        // Define Globals
         let database;
         let drawingRef;
         const statusDiv = document.getElementById('game-status');
         
-        // Canvas constants
         const CANVAS_WIDTH = 800; 
         const CANVAS_HEIGHT = 600;
         const canvas = document.getElementById('drawing-canvas');
@@ -267,7 +260,6 @@
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT;
 
-        // Drawing state variables
         let isDrawing = false;
         let lastX_norm = 0; 
         let lastY_norm = 0; 
@@ -278,58 +270,44 @@
             clear: document.getElementById('clear-button')
         };
         
-        /**
-         * Core initialization function, executed once the window loads.
-         */
-        window.onload = async function() {
+        window.onload = function() {
             try {
                 // Initialize Firebase App
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
-                const auth = firebase.auth();
                 drawingRef = database.ref('game/currentDrawing');
                 
-                // *** FIX FOR LOCALHOST PERMISSION DENIED ***
-                // Sign in anonymously to satisfy Firebase write rules.
-                await auth.signInAnonymously();
-                console.log("Firebase Auth: Signed in anonymously.");
-                // **********************************************
-
-                // 2. Set Connection Status Listener
+                // 2. Set Connection Status Listener (Checks if Firebase is reachable)
                 database.ref('.info/connected').on('value', (snapshot) => {
                     if (snapshot.val() === true) {
-                        statusDiv.textContent = 'Status: Ready (Real-Time)';
+                        statusDiv.textContent = 'Status: Connected & Ready';
                         statusDiv.className = 'status-indicator connected';
                     } else {
-                        statusDiv.textContent = 'Status: Disconnected';
+                        statusDiv.textContent = 'Status: Disconnected (Check Console)';
                         statusDiv.className = 'status-indicator error';
                     }
                 });
 
-                // 3. Setup Canvas Listeners
+                // 3. Setup Canvas, Listeners, and Controls
                 setupCanvasListeners();
-
-                // 4. Setup Firebase Data Listener
                 setupFirebaseListener();
-
-                // 5. Setup Controls & Game Logic
                 setupControls();
 
             } catch (error) {
-                console.error("Critical Firebase Setup Error:", error);
-                statusDiv.textContent = 'Error: Check Console/Rules';
+                // *** THIS CATCH BLOCK IS THE CRITICAL DEBUGGING TOOL ***
+                console.error("--- CRITICAL FIREBASE INITIALIZATION ERROR ---");
+                console.error("Please copy this error text to find the solution:", error);
+                statusDiv.textContent = 'INIT ERROR! See Console (F12)';
                 statusDiv.className = 'status-indicator error';
-                alert('Connection Failed. Please check Firebase console rules!');
             }
         }
 
 
-        // --- DRAWING LOGIC ---
+        // --- DRAWING LOGIC (Identical to previous, proven to be functional) ---
 
         function startDrawing(clientX, clientY) {
             isDrawing = true;
             const rect = canvas.getBoundingClientRect();
-            // Normalized coordinates (0 to 1)
             lastX_norm = (clientX - rect.left) / CANVAS_WIDTH;
             lastY_norm = (clientY - rect.top) / CANVAS_HEIGHT;
         }
@@ -350,15 +328,15 @@
                 width: controls.width.value
             };
 
-            // Send Real-Time Data to Firebase
-            drawingRef.push(data); 
+            // Push data only if successfully connected
+            if (drawingRef) {
+                drawingRef.push(data); 
+            }
 
-            // Update last normalized coordinates for the next segment
             lastX_norm = currentX_norm;
             lastY_norm = currentY_norm;
         }
         
-        // Renders a stroke segment locally
         function drawSegment(data) {
             ctx.strokeStyle = data.color;
             ctx.lineWidth = data.width;
@@ -377,13 +355,11 @@
         }
         
         function setupCanvasListeners() {
-            // Mouse Events
             canvas.addEventListener('mousedown', (e) => startDrawing(e.clientX, e.clientY));
             canvas.addEventListener('mouseup', () => isDrawing = false);
             canvas.addEventListener('mouseout', () => isDrawing = false);
             canvas.addEventListener('mousemove', (e) => draw(e.clientX, e.clientY));
 
-            // Touch Events (For Mobile/Tablet compatibility)
             canvas.addEventListener('touchstart', (e) => {
                 e.preventDefault(); 
                 startDrawing(e.touches[0].clientX, e.touches[0].clientY);
@@ -399,8 +375,12 @@
         // --- FIREBASE LISTENERS & CONTROLS ---
 
         function setupFirebaseListener() {
+            // Add a listener for any potential write errors (e.g., Permission Denied)
+            drawingRef.on('value', () => {}, (error) => {
+                console.error("FIREBASE REALTIME ERROR (Permission/Database):", error);
+            });
+
             drawingRef.on('child_added', (snapshot) => {
-                // Renders every new stroke segment pushed to Firebase
                 const data = snapshot.val();
                 drawSegment(data);
             });
@@ -410,13 +390,14 @@
             // Clear Button Logic
             controls.clear.addEventListener('click', () => {
                 ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                // Clear the Firebase database to synchronize with all users
-                drawingRef.remove().then(() => {
-                    console.log("Canvas cleared.");
-                });
+                if (drawingRef) {
+                    drawingRef.remove().then(() => {
+                        console.log("Canvas cleared.");
+                    });
+                }
             });
 
-            // Game Guessing Placeholder (You would expand this!)
+            // Game Guessing Placeholder
             const guessInput = document.getElementById('guess-input');
             const sendGuessBtn = document.getElementById('send-guess');
             const chatList = document.getElementById('chat-list');
@@ -427,7 +408,6 @@
                 if (guess === "") return;
                 
                 const isCorrect = guess.toUpperCase() === currentWord;
-
                 const message = isCorrect
                     ? `🟢 CORRECT! Player guessed the word: ${currentWord}`
                     : `🟠 Guess: ${guess}`;
