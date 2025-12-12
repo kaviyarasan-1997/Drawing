@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Multiplayer Sketch (Single File)</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script> 
+    
+    <style>
+        /* --- CSS STYLES (Professional Dark Mode) --- */
+        :root {
+            --color-background: #1e1e1e;
+            --color-surface: #2d2d2d;
+            --color-primary: #00e676; /* Bright Green Accent */
+            --color-secondary: #00b0ff; /* Blue Accent */
+            --color-text: #e0e0e0;
+            --color-border: #444444;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--color-background);
+            color: var(--color-text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .game-wrapper {
+            width: 95%;
+            max-width: 1400px;
+            background: var(--color-surface);
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .game-header {
+            background-color: #121212;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .game-header h1 {
+            margin: 0;
+            font-size: 1.8em;
+            color: var(--color-primary);
+        }
+
+        .status-indicator {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .status-indicator.pending { background-color: #ff9800; color: #1e1e1e; }
+        .status-indicator.connected { background-color: var(--color-primary); color: #1e1e1e; }
+        .status-indicator.error { background-color: #f44336; color: white; }
+
+        .main-layout {
+            display: flex;
+            min-height: 700px;
+        }
+
+        .canvas-panel {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #drawing-canvas {
+            border: 2px solid var(--color-border);
+            background-color: #ffffff; /* Drawing surface is white */
+            cursor: crosshair;
+            border-radius: 8px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-panel {
+            width: 300px;
+            background-color: var(--color-surface);
+            border-left: 1px solid var(--color-border);
+            padding: 20px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .control-panel h3 {
+            color: var(--color-secondary);
+            border-bottom: 2px solid var(--color-border);
+            padding-bottom: 5px;
+            margin-top: 0;
+        }
+
+        .tool-group {
+            margin-bottom: 15px;
+        }
+
+        .tool-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        /* Inputs */
+        input[type="range"], input[type="color"] {
+            width: 100%;
+            height: 25px; /* Adjust height for range input */
+        }
+        
+        #color-picker {
+            height: 40px;
+            padding: 0;
+            border: none;
+            background: transparent;
+        }
+
+        /* Buttons */
+        .btn-primary, .btn-secondary {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s, transform 0.1s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background-color: var(--color-primary);
+            color: #1e1e1e;
+        }
+
+        .btn-primary:hover {
+            background-color: #00c853;
+        }
+
+        .btn-secondary {
+            background-color: var(--color-secondary);
+            color: white;
+        }
+
+        .chat-log {
+            list-style: none;
+            padding: 10px;
+            margin: 0;
+            height: 100%; 
+            max-height: 250px;
+            overflow-y: auto;
+            background-color: #383838;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border: 1px solid var(--color-border);
+        }
+
+        .chat-input-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        #guess-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid var(--color-border);
+            border-radius: 5px;
+            background-color: #383838;
+            color: var(--color-text);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 900px) {
+            .main-layout {
+                flex-direction: column;
+            }
+            .control-panel {
+                width: auto; /* Full width */
+                border-left: none;
+                border-top: 1px solid var(--color-border);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <header class="game-header">
+            <h1>Real-Time Sketch</h1>
+            <div id="game-status" class="status-indicator pending">Initializing...</div>
+        </header>
+
+        <div class="main-layout">
+            
+            <main class="canvas-panel">
+                <canvas id="drawing-canvas"></canvas>
+            </main>
+
+            <aside class="control-panel">
+                <section class="tools-section">
+                    <h3>🎨 Drawing Tools</h3>
+                    <div class="tool-group">
+                        <label for="color-picker">Color</label>
+                        <input type="color" id="color-picker" value="#00e676">
+                    </div>
+                    <div class="tool-group">
+                        <label for="line-width">Line Size</label>
+                        <input type="range" id="line-width" min="1" max="50" value="5">
+                    </div>
+                    <button id="clear-button" class="btn-primary">Clear Board</button>
+                </section>
+                
+                <section class="game-info-section">
+                    <h3>💡 Game Hint</h3>
+                    <p id="current-word" class="word-display">Word: **Waiting for host...**</p>
+                </section>
+
+                <section class="chat-section">
+                    <h3>💬 Chat & Guesses</h3>
+                    <ul id="chat-list" class="chat-log"></ul>
+                    <div class="chat-input-group">
+                        <input type="text" id="guess-input" placeholder="Type your guess...">
+                        <button id="send-guess" class="btn-secondary">Send</button>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </div>
+    
+    <script>
+        // --- JAVASCRIPT LOGIC ---
+
+        // 1. Firebase Configuration (USE YOUR PROVIDED KEYS)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBLyf_dz6xPC9wdthZSVtpatkc8JgFhE4Q",
+            authDomain: "chatbox-chats.firebaseapp.com",
+            projectId: "chatbox-chats",
+            storageBucket: "chatbox-chats.appspot.com",
+            messagingSenderId: "10200860576",
+            appId: "1:10200860576:web:262315d86f6d1732ddc6c5"
+        };
+        
+        // Define Globals
+        let database;
+        let drawingRef;
+        const statusDiv = document.getElementById('game-status');
+        
+        // Canvas constants
+        const CANVAS_WIDTH = 800; 
+        const CANVAS_HEIGHT = 600;
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        // Drawing state variables
+        let isDrawing = false;
+        let lastX_norm = 0; 
+        let lastY_norm = 0; 
+
+        const controls = {
+            color: document.getElementById('color-picker'),
+            width: document.getElementById('line-width'),
+            clear: document.getElementById('clear-button')
+        };
+        
+        /**
+         * Core initialization function, executed once the window loads.
+         */
+        window.onload = async function() {
+            try {
+                // Initialize Firebase App
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                const auth = firebase.auth();
+                drawingRef = database.ref('game/currentDrawing');
+                
+                // *** FIX FOR LOCALHOST PERMISSION DENIED ***
+                // Sign in anonymously to satisfy Firebase write rules.
+                await auth.signInAnonymously();
+                console.log("Firebase Auth: Signed in anonymously.");
+                // **********************************************
+
+                // 2. Set Connection Status Listener
+                database.ref('.info/connected').on('value', (snapshot) => {
+                    if (snapshot.val() === true) {
+                        statusDiv.textContent = 'Status: Ready (Real-Time)';
+                        statusDiv.className = 'status-indicator connected';
+                    } else {
+                        statusDiv.textContent = 'Status: Disconnected';
+                        statusDiv.className = 'status-indicator error';
+                    }
+                });
+
+                // 3. Setup Canvas Listeners
+                setupCanvasListeners();
+
+                // 4. Setup Firebase Data Listener
+                setupFirebaseListener();
+
+                // 5. Setup Controls & Game Logic
+                setupControls();
+
+            } catch (error) {
+                console.error("Critical Firebase Setup Error:", error);
+                statusDiv.textContent = 'Error: Check Console/Rules';
+                statusDiv.className = 'status-indicator error';
+                alert('Connection Failed. Please check Firebase console rules!');
+            }
+        }
+
+
+        // --- DRAWING LOGIC ---
+
+        function startDrawing(clientX, clientY) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            // Normalized coordinates (0 to 1)
+            lastX_norm = (clientX - rect.left) / CANVAS_WIDTH;
+            lastY_norm = (clientY - rect.top) / CANVAS_HEIGHT;
+        }
+
+        function draw(clientX, clientY) {
+            if (!isDrawing) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const currentX_norm = (clientX - rect.left) / CANVAS_WIDTH;
+            const currentY_norm = (clientY - rect.top) / CANVAS_HEIGHT;
+            
+            const data = {
+                x: currentX_norm,
+                y: currentY_norm,
+                lastX: lastX_norm,
+                lastY: lastY_norm,
+                color: controls.color.value,
+                width: controls.width.value
+            };
+
+            // Send Real-Time Data to Firebase
+            drawingRef.push(data); 
+
+            // Update last normalized coordinates for the next segment
+            lastX_norm = currentX_norm;
+            lastY_norm = currentY_norm;
+        }
+        
+        // Renders a stroke segment locally
+        function drawSegment(data) {
+            ctx.strokeStyle = data.color;
+            ctx.lineWidth = data.width;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            
+            const startX = data.lastX * CANVAS_WIDTH;
+            const startY = data.lastY * CANVAS_HEIGHT;
+            const endX = data.x * CANVAS_WIDTH;
+            const endY = data.y * CANVAS_HEIGHT;
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+        }
+        
+        function setupCanvasListeners() {
+            // Mouse Events
+            canvas.addEventListener('mousedown', (e) => startDrawing(e.clientX, e.clientY));
+            canvas.addEventListener('mouseup', () => isDrawing = false);
+            canvas.addEventListener('mouseout', () => isDrawing = false);
+            canvas.addEventListener('mousemove', (e) => draw(e.clientX, e.clientY));
+
+            // Touch Events (For Mobile/Tablet compatibility)
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault(); 
+                startDrawing(e.touches[0].clientX, e.touches[0].clientY);
+            });
+            canvas.addEventListener('touchend', () => isDrawing = false);
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault(); 
+                draw(e.touches[0].clientX, e.touches[0].clientY);
+            });
+        }
+
+
+        // --- FIREBASE LISTENERS & CONTROLS ---
+
+        function setupFirebaseListener() {
+            drawingRef.on('child_added', (snapshot) => {
+                // Renders every new stroke segment pushed to Firebase
+                const data = snapshot.val();
+                drawSegment(data);
+            });
+        }
+
+        function setupControls() {
+            // Clear Button Logic
+            controls.clear.addEventListener('click', () => {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                // Clear the Firebase database to synchronize with all users
+                drawingRef.remove().then(() => {
+                    console.log("Canvas cleared.");
+                });
+            });
+
+            // Game Guessing Placeholder (You would expand this!)
+            const guessInput = document.getElementById('guess-input');
+            const sendGuessBtn = document.getElementById('send-guess');
+            const chatList = document.getElementById('chat-list');
+            let currentWord = "FIREBASE"; 
+
+            sendGuessBtn.addEventListener('click', () => {
+                const guess = guessInput.value.trim();
+                if (guess === "") return;
+                
+                const isCorrect = guess.toUpperCase() === currentWord;
+
+                const message = isCorrect
+                    ? `🟢 CORRECT! Player guessed the word: ${currentWord}`
+                    : `🟠 Guess: ${guess}`;
+                
+                const li = document.createElement('li');
+                li.innerHTML = message;
+                chatList.appendChild(li);
+                chatList.scrollTop = chatList.scrollHeight;
+                
+                guessInput.value = ''; 
+            });
+        }
+    </script>
+</body>
+</html>
